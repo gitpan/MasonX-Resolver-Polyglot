@@ -1,5 +1,9 @@
 Revision history
 
+0.9	20050210
+	Some internal consistancy cleanup
+0.8	20041203
+	Stash original $r->uri in pnotes('POLYGLOT_URI')
 0.7	20041006
 	Added a way to specify the default URL language
 	Made the chosen language available to a component via $r->pnotes('POLYGLOT_LANG') 

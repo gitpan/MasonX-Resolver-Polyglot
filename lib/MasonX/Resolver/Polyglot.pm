@@ -32,14 +32,14 @@ Or, in your Mason guts:
 
 =head1 DESCRIPTION
 
-This HTML::Mason::Resolver::File::ApacheHandler subclass enables Mason to determine the client's language preference and find the best matching component to fulfill it.
+This C<HTML::Mason::Resolver::File::ApacheHandler> subclass enables Mason to determine the client's language preference and find the best matching component to fulfill it.
 
 This allows a web designer to provide structure in language independant components, and confine language-centric HTML to other components that the top level pages use.
 
 Components are labeled by suffix.  
 
 Examples:
-    index.html - language independant component.  Either last try component (if no other languages are acceptable) or the default language (if PolyglotDefaultLang is set).
+    index.html - language independant component.  Either last try component (if no other languages are acceptable) or the default language (if C<PolyglotDefaultLang> is set).
     index.html.es - Spanish component.  If a browser's Language-Accept describes Spanish as more preferable than English, requests for index.html will return this component.
 
 There is nothing magic about the html suffix; these do not have to be top level components.  Let us suppose that index.html has a component called "menubar" which has text or image buttons of the site map.  We may write the following components:
@@ -52,7 +52,8 @@ The code in index.html just calls "menubar" normally, and the resolver will pick
 
 There are really two pieces to Polyglot. The Mason resolver piece is a child of HTML::Mason::Resolver::File::ApacheHandler and compares the Language-Accept preferences a web client presents with what is available on the filesystem, and finds the best match.
 
-The other piece is the PerlInitHandler which scans the URL for a leading language code.  The effect this has is to override all preferences.    
+The other piece is the PerlInitHandler which scans (and potentially alters) the URL for a leading language code.  The effect this has is to override all preferences.    
+If, for some reason, you want to peek at the URI that actually was typed in before Polyglot ate the language code, it is stashed away in $r->pnotes('POLYGLOT_URI'). 
 
 Like our aformentioned English/Spanish site, we have an English index.html, and a Spanish index.html.es.  My site wants to provide the ability to choose the site language without mucking with the brower's language preference.
 In my index.html, I have a "Spanish" link which links to "/es/index.html", and an "English" link in my index.html.es that links to "/index.html".  I make all other links in the site _relative_.
@@ -62,14 +63,22 @@ The effect this has is to propagate the /es/ prefix, consistantly overriding the
 Polyglot now makes its language decision order array available through the Apache request pnotes() interface as an array ref.
 If you call:
 
-    my @langs = @{$r->pnotes('POLYGLOT_LANGS')};
+    my @langs   = @{$r->pnotes('POLYGLOT_LANGS')};
 
 @langs will contain a ranked list of language preference.
+
+It makes the language decision it made available by:
+
+    my $lang    =   $r->pnotes('POLYGLOT_LANG');
+
+And also, the original pre-language-stripped URI available like so:
+
+    my $origuri =   $r->pnotes('POLYGLOT_URI')
 
 =cut
 
 package MasonX::Resolver::Polyglot;
-$VERSION = q(0.7);
+$VERSION = q(0.9);
 
 use strict;
 
@@ -239,6 +248,8 @@ sub uri_override{
        # !!! This will MODIFY the URI, extracting out the leading language tag
     $DEBUG && $r->log_error("URI: uri is: @{[$r->uri]}");
     my $urilang;
+    # Save uri in case we need it
+    $r->pnotes('POLYGLOT_URI' => $r->uri);
     my @uri = split(/\/+/, $r->uri);
     # leading slash = leading ""
     shift @uri;
@@ -254,6 +265,7 @@ sub uri_override{
     # Stash language preference in ENV and pnotes
 	$ENV{$POLYGLOT_LANG} = $urilang;
 	$r->pnotes('POLYGLOT_URILANG', $urilang);
+	$r->pnotes('POLYGLOT_LANG', $urilang);
     # 86 the language tag, rebuild the URI
 	shift @uri;
 	$r->uri(join('/', "", @uri));
@@ -291,6 +303,10 @@ sub _get_env_pref{
 =head1 SEE ALSO
 
 L<HTML::Mason::Resolver::File|HTML::Mason::Resolver::File>
+
+=head1 CREDIT
+
+Thanks to Dorian Taylor <dorian@foobarsystems.com> for his nice Accept-Language code.
 
 =head1 AUTHOR
 
