@@ -1,0 +1,7 @@
+Revision history
+
+0.6	20040317
+	Corrected and expanded the documentation.
+	Fixed bug in loading HTML::Mason::Resolver::File::ApacheHandler
+0.5	20040314
+	First public release.  Functional.

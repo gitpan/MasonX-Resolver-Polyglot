@@ -10,18 +10,22 @@ MasonX::Resolver::Polyglot - Component path resolver for easy internationalizati
 
 In your http.conf:
 
-     PerlInitHandler MasonX::Resolver::Polyglot
+PerlInitHandler MasonX::Resolver::Polyglot
+<Directory /var/www/html>
      PerlSetVar PolyglotDefaultLang en
-
+     PerlAddVar MasonDataDir "/var/www/mason"
+     PerlAddVar MasonCompRoot "/var/www/html"
+     PerlSetVar PolyglotDefaultLang en
      <FilesMatch "^..$|\.html(\...)?$">
            SetHandler perl-script
                 PerlSetVar MasonResolverClass MasonX::Resolver::Polyglot
                 PerlHandler HTML::Mason::ApacheHandler
      </FilesMatch>
+</Directory>
 
 Or, in your Mason guts:
 
-  my $resolver = MasonX::Resolver::Polygot->new( comp_root => '/var/www/mason' );
+  my $resolver = MasonX::Resolver::Polyglot->new( comp_root => '/var/www/mason' );
   my $info = $resolver->get_info('/some/comp.html');
   my $comp_root = $resolver->comp_root;
 
@@ -57,11 +61,13 @@ The effect this has is to propagate the /es/ prefix, consistantly overriding the
 =cut
 
 package MasonX::Resolver::Polyglot;
-use base qw(HTML::Mason::Resolver::File::ApacheHandler);
-
-$VERSION = q(0.5);
+$VERSION = q(0.6);
 
 use strict;
+
+# We need this, since our parent is embedded in the HTML::Mason::ApacheHandler file
+use HTML::Mason::ApacheHandler;
+use base qw(HTML::Mason::Resolver::File::ApacheHandler);
 
 use HTML::Mason::Tools qw(paths_eq);
 use Locale::Language qw(code2language);
