@@ -1,5 +1,8 @@
 Revision history
 
+0.7	20041006
+	Added a way to specify the default URL language
+	Made the chosen language available to a component via $r->pnotes('POLYGLOT_LANG') 
 0.6	20040317
 	Corrected and expanded the documentation.
 	Fixed bug in loading HTML::Mason::Resolver::File::ApacheHandler

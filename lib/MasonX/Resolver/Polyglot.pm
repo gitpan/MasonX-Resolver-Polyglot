@@ -10,18 +10,19 @@ MasonX::Resolver::Polyglot - Component path resolver for easy internationalizati
 
 In your http.conf:
 
-PerlInitHandler MasonX::Resolver::Polyglot
-<Directory /var/www/html>
+    PerlInitHandler MasonX::Resolver::Polyglot
+    <Directory /var/www/html>
      PerlSetVar PolyglotDefaultLang en
+     PerlSetVar PolyglotDefaultURILang en
      PerlAddVar MasonDataDir "/var/www/mason"
      PerlAddVar MasonCompRoot "/var/www/html"
      PerlSetVar PolyglotDefaultLang en
      <FilesMatch "^..$|\.html(\...)?$">
            SetHandler perl-script
-                PerlSetVar MasonResolverClass MasonX::Resolver::Polyglot
-                PerlHandler HTML::Mason::ApacheHandler
+           PerlSetVar MasonResolverClass MasonX::Resolver::Polyglot
+           PerlHandler HTML::Mason::ApacheHandler
      </FilesMatch>
-</Directory>
+    </Directory>
 
 Or, in your Mason guts:
 
@@ -58,10 +59,17 @@ In my index.html, I have a "Spanish" link which links to "/es/index.html", and a
 
 The effect this has is to propagate the /es/ prefix, consistantly overriding the browser's language preference until the user clicks on an absolute URL.
 
+Polyglot now makes its language decision order array available through the Apache request pnotes() interface as an array ref.
+If you call:
+
+    my @langs = @{$r->pnotes('POLYGLOT_LANGS')};
+
+@langs will contain a ranked list of language preference.
+
 =cut
 
 package MasonX::Resolver::Polyglot;
-$VERSION = q(0.6);
+$VERSION = q(0.7);
 
 use strict;
 
@@ -78,11 +86,13 @@ my $DEBUG = 0;
 # This is the name of the env variable that uri_override uses
 my $POLYGLOT_LANG       = q(POLYGLOT_LANG);
 my $PolyglotDefaultLang = q(PolyglotDefaultLang);
+my $PolyglotDefaultURILang = q(PolyglotDefaultURILang);
 
 sub new{
     my $class = shift;
     my $self = $class->SUPER::new(@_);
     $self->{default_lang} = lc Apache->request->dir_config($PolyglotDefaultLang);
+    $self->{default_uri_lang} = lc Apache->request->dir_config($PolyglotDefaultURILang);
     return $self;
 }    
 
@@ -115,10 +125,13 @@ sub get_info{
 	
     # No matter what, lastly look for the "pure" version
     push @langs, ""; # so we check a no extension lang last
-
     
      # CHECK to see if any exist in filesystem
     my $comp;
+
+    # Make language order available through $r->pnotes
+    my @POLYGLOT_LANGS = @langs;
+    $r->pnotes('POLYGLOT_LANGS', \@POLYGLOT_LANGS);
     while(defined ($_ = shift @langs)){
         $DEBUG && $r->log_error(join("", $path, $_?('.', $_):""));
 	if($comp = $self->SUPER::get_info(join("", $path, $_?('.', $_):""))){
@@ -223,9 +236,8 @@ sub uri_override{
     # This method allows the url to override the client pref, 
     #  but still expresses it as a preference - 
     #  we can still fall back on another lang for a component
-
-    # !!! This will MODIFY the URI, extracting out the leading language tag
-    
+       # !!! This will MODIFY the URI, extracting out the leading language tag
+    $DEBUG && $r->log_error("URI: uri is: @{[$r->uri]}");
     my $urilang;
     my @uri = split(/\/+/, $r->uri);
     # leading slash = leading ""
@@ -239,8 +251,9 @@ sub uri_override{
 		     ? LOCALE_CODE_ALPHA_2 : LOCALE_CODE_ALPHA_3 ))){
 	$DEBUG && $r->log_error("$uri[0] is a valid lang tag!");
 	$urilang = $2?join('-', lc($1), lc($2)):$1;
-    # Stash language preference in ENV
+    # Stash language preference in ENV and pnotes
 	$ENV{$POLYGLOT_LANG} = $urilang;
+	$r->pnotes('POLYGLOT_URILANG', $urilang);
     # 86 the language tag, rebuild the URI
 	shift @uri;
 	$r->uri(join('/', "", @uri));
@@ -265,7 +278,12 @@ sub _get_env_pref{
     if($ENV{$POLYGLOT_LANG}){
 	$$Accept{$ENV{$POLYGLOT_LANG}}{q} = 100; # trump everything - top the list
 	return $Accept;
+    }elsif($self->{default_uri_lang}){
+	$$Accept{$self->{default_uri_lang}}{q} = 100; # trump everything - top the list
+	$self->{r}->pnotes('POLYGLOT_URILANG', $self->{default_uri_lang});
+	return $Accept;
     }
+
 }
 
 1;
