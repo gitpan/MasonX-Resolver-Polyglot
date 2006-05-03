@@ -1,5 +1,7 @@
 Revision history
 
+0.95	20060502
+	Clarified some documentation.  Updated to be compatible with recent HTML::Mason
 0.9	20050210
 	Some internal consistancy cleanup
 0.8	20041203

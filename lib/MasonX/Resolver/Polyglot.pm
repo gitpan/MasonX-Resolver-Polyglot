@@ -16,7 +16,6 @@ In your http.conf:
      PerlSetVar PolyglotDefaultURILang en
      PerlAddVar MasonDataDir "/var/www/mason"
      PerlAddVar MasonCompRoot "/var/www/html"
-     PerlSetVar PolyglotDefaultLang en
      <FilesMatch "^..$|\.html(\...)?$">
            SetHandler perl-script
            PerlSetVar MasonResolverClass MasonX::Resolver::Polyglot
@@ -29,6 +28,12 @@ Or, in your Mason guts:
   my $resolver = MasonX::Resolver::Polyglot->new( comp_root => '/var/www/mason' );
   my $info = $resolver->get_info('/some/comp.html');
   my $comp_root = $resolver->comp_root;
+
+=head1 CONFIGURATION
+
+=item C<PolyglotDefaultLang> sets the fall back language.  If unset, Polyglot will fall back on a file with no suffix (foo.html).
+
+=item C<PolyglotDefaultURILang> overrides language selection based upon Language-Accept.  It is equivalent to prefixing the url with a language code (http://foo.com/en-us/foo.html)
 
 =head1 DESCRIPTION
 
@@ -78,13 +83,13 @@ And also, the original pre-language-stripped URI available like so:
 =cut
 
 package MasonX::Resolver::Polyglot;
-$VERSION = q(0.9);
+$VERSION = q(0.95);
 
 use strict;
 
 # We need this, since our parent is embedded in the HTML::Mason::ApacheHandler file
 use HTML::Mason::ApacheHandler;
-use base qw(HTML::Mason::Resolver::File::ApacheHandler);
+use base qw(HTML::Mason::Resolver::File);
 
 use HTML::Mason::Tools qw(paths_eq);
 use Locale::Language qw(code2language);
@@ -106,19 +111,19 @@ sub new{
 }    
 
 sub get_info{
-    my ($self, $path) = @_;
+    my ($self, $path, $comp_root_key, $comp_root_path) = @_;
     
     # Is this already stored somewhere I can grab it?
     # I suspect this is wasteful.
     my $r = Apache->request;
     
     $DEBUG && $r->log_error(qq(URI:) . $r->uri . qq(, path: $path)); 
-
+    $DEBUG && $r->log_error(qq(Header says: ), $r->header_in('Accept-Language'));
     # Get a ranked list of language prefs based on the Accept-Language and URI
     # everything in get_langs will need an $r
     $self->{r} = $r;
     my @langs = @{$self->get_langs(\$path)};
-    $DEBUG && $r->log_error(join(",", @langs));
+    $DEBUG && $r->log_error("Languages Accepted: ", join(",", @langs));
     delete $self->{r};
  
     # If we have a default language set, then "" gets spliced in 
@@ -142,8 +147,8 @@ sub get_info{
     my @POLYGLOT_LANGS = @langs;
     $r->pnotes('POLYGLOT_LANGS', \@POLYGLOT_LANGS);
     while(defined ($_ = shift @langs)){
-        $DEBUG && $r->log_error(join("", $path, $_?('.', $_):""));
-	if($comp = $self->SUPER::get_info(join("", $path, $_?('.', $_):""))){
+        $DEBUG && $r->log_error(join("", $path, $_?('.', $_):""), $comp_root_key, $comp_root_path);
+	if($comp = $self->SUPER::get_info(join("", $path, $_?('.', $_):""), $comp_root_key, $comp_root_path)){
 	    $DEBUG && $r->log_error("picked '$_'");
 	    return $comp;
 	}
@@ -263,7 +268,7 @@ sub uri_override{
 	$DEBUG && $r->log_error("$uri[0] is a valid lang tag!");
 	$urilang = $2?join('-', lc($1), lc($2)):$1;
     # Stash language preference in ENV and pnotes
-	$ENV{$POLYGLOT_LANG} = $urilang;
+	$ENV{$POLYGLOT_LANG} = $urilang || lc $r->dir_config($PolyglotDefaultLang);
 	$r->pnotes('POLYGLOT_URILANG', $urilang);
 	$r->pnotes('POLYGLOT_LANG', $urilang);
     # 86 the language tag, rebuild the URI
@@ -287,10 +292,7 @@ sub _get_env_pref{
     my $Accept = shift||{};
     
     # Check the environment to see if there is a favoured language
-    if($ENV{$POLYGLOT_LANG}){
-	$$Accept{$ENV{$POLYGLOT_LANG}}{q} = 100; # trump everything - top the list
-	return $Accept;
-    }elsif($self->{default_uri_lang}){
+    if($self->{default_uri_lang}){
 	$$Accept{$self->{default_uri_lang}}{q} = 100; # trump everything - top the list
 	$self->{r}->pnotes('POLYGLOT_URILANG', $self->{default_uri_lang});
 	return $Accept;
